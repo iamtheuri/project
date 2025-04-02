@@ -36,3 +36,5 @@ secrete.txt
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+drizzle.config.js
+src/utils/db/dbConfig.jsx
