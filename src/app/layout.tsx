@@ -6,8 +6,9 @@ import "./globals.css"
 import Header from "@/components/Header"
 import Sidebar from "@/components/Sidebar"
 import 'leaflet/dist/leaflet.css'
-import { Toaster } from 'react-hot-toast'
+// import { Toaster } from 'react-hot-toast'
 import { getAvailableRewards, getUserByEmail } from '@/utils/db/actions'
+import { Toaster } from '@/components/ui/toaster'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -43,6 +44,9 @@ export default function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/favicon.svg" sizes="any" />
+      </head>
       <body className={inter.className}>
         <div className="min-h-screen bg-gray-50 flex flex-col">
           <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} totalEarnings={totalEarnings} />

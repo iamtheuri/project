@@ -18,12 +18,17 @@ import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { createUser, getUnreadNotifications, markNotificationAsRead, getUserByEmail, getUserBalance } from "@/utils/db/actions"
 
-const clientId = "BJKdDFkNtkWX87XqkuWrDu4rbkSvWyQZ5lswS0ucINxxcN0inRVW8zzKAywPPzgiOHP7_3PcfFwfpvcQvSdaLRs";
+const clientId = process.env.NEXT_PUBLIC_WEB3_AUTH_CLIENT_ID;
+
+if (!clientId) {
+  throw new Error("Missing client ID");
+}
 
 const chainConfig = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0xaa36a7",
   rpcTarget: "https://rpc.ankr.com/eth_sepolia",
+  rpcTarget: `https://rpc.ankr.com/eth_sepolia/${process.env.NEXT_PUBLIC_ETH_SEPOLIA_API_KEY}`,
   displayName: "Ethereum Sepolia Testnet",
   blockExplorerUrl: "https://sepolia.etherscan.io",
   ticker: "ETH",
@@ -31,15 +36,31 @@ const chainConfig = {
   logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
 };
 
+
 const privateKeyProvider = new EthereumPrivateKeyProvider({
   config: { chainConfig },
 });
 
 const web3auth = new Web3Auth({
   clientId,
-  web3AuthNetwork: WEB3AUTH_NETWORK.TESTNET, // Changed from SAPPHIRE_MAINNET to TESTNET
+  web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
   privateKeyProvider,
+  chainConfig,
+  uiConfig: {
+    appName: "Trash2Token",
+    theme: "light",
+    loginMethodsOrder: ["google"]
+  },
+  loginConfig: {
+    google: {
+      verifier: "Trash2Token",
+      typeOfLogin: "google",
+      clientId: process.env.NEXT_PUBLIC_GOOGLE_CONSOLE_CLIENT_ID,
+    }
+  }
 });
+
+console.log("web3auth", web3auth);
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -47,14 +68,14 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
-  const [provider, setProvider] = useState<IProvider | null>(null);
-  const [loggedIn, setLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [provider, setProvider] = useState<IProvider | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
-  const pathname = usePathname()
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const isMobile = useMediaQuery("(max-width: 768px)")
   const [balance, setBalance] = useState(0)
+  const pathname = usePathname()
 
   console.log('user info', userInfo);
 
@@ -74,7 +95,6 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
               await createUser(user.email, user.name || 'Anonymous User');
             } catch (error) {
               console.error("Error creating user:", error);
-              // Handle the error appropriately, maybe show a message to the user
             }
           }
         }
@@ -101,8 +121,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
 
     fetchNotifications();
 
-    // Set up periodic checking for new notifications
-    const notificationInterval = setInterval(fetchNotifications, 30000); // Check every 30 seconds
+    const notificationInterval = setInterval(fetchNotifications, 60000); // Check every 60 seconds for new notifications
 
     return () => clearInterval(notificationInterval);
   }, [userInfo]);
@@ -120,7 +139,6 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
 
     fetchUserBalance();
 
-    // Add an event listener for balance updates
     const handleBalanceUpdate = (event: CustomEvent) => {
       setBalance(event.detail);
     };
@@ -134,7 +152,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
 
   const login = async () => {
     if (!web3auth) {
-      console.log("web3auth not initialized yet");
+      console.log("Web3auth not initialized yet");
       return;
     }
     try {
@@ -149,7 +167,6 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
           await createUser(user.email, user.name || 'Anonymous User');
         } catch (error) {
           console.error("Error creating user:", error);
-          // Handle the error appropriately, maybe show a message to the user
         }
       }
     } catch (error) {
@@ -287,7 +304,6 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
                 <DropdownMenuItem>
                   <Link href="/settings">Profile</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>Settings</DropdownMenuItem>
                 <DropdownMenuItem onClick={logout}>Sign Out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
