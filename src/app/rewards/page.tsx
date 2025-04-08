@@ -17,6 +17,7 @@ import {
   createTransaction,
 } from "@/utils/db/actions";
 import { toast } from "react-hot-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type Transaction = {
   id: number;
@@ -35,6 +36,7 @@ type Reward = {
 };
 
 export default function RewardsPage() {
+  usePageTitle("Profile");
   const [user, setUser] = useState<{
     id: number;
     email: string;

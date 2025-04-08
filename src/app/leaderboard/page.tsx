@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { getAllRewards, getUserByEmail } from "@/utils/db/actions";
 import { Loader, Award, User, Trophy, Crown } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type Reward = {
   id: number;
@@ -14,6 +15,7 @@ type Reward = {
 };
 
 export default function LeaderboardPage() {
+  usePageTitle("Leaderboard");
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{

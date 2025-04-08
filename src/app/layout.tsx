@@ -6,7 +6,6 @@ import "./globals.css"
 import Header from "@/components/Header"
 import Sidebar from "@/components/Sidebar"
 import 'leaflet/dist/leaflet.css'
-// import { Toaster } from 'react-hot-toast'
 import { getAvailableRewards, getUserByEmail } from '@/utils/db/actions'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -26,8 +25,6 @@ export default function RootLayout({
         const userEmail = localStorage.getItem('userEmail')
         if (userEmail) {
           const user = await getUserByEmail(userEmail)
-          console.log('user from layout', user);
-
           if (user) {
             const availableRewards = await getAvailableRewards(user.id) as any
             console.log('availableRewards from layout', availableRewards);

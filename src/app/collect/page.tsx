@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input.tsx';
 import { toast } from 'react-hot-toast'
 import { getWasteCollectionTasks, updateTaskStatus, saveReward, saveCollectedWaste, getUserByEmail } from '@/utils/db/actions'
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { usePageTitle } from '@/hooks/usePageTitle';
 
-const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY
+const modelApiKey = process.env.NEXT_PUBLIC_MODEL_API_KEY
 
 type CollectionTask = {
   id: number
@@ -22,6 +23,7 @@ type CollectionTask = {
 const ITEMS_PER_PAGE = 5
 
 export default function CollectPage() {
+  usePageTitle("Collect Waste");
   const [tasks, setTasks] = useState<CollectionTask[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredWasteType, setHoveredWasteType] = useState<string | null>(null)
@@ -118,7 +120,7 @@ export default function CollectPage() {
     setVerificationStatus('verifying')
 
     try {
-      const genAI = new GoogleGenerativeAI(geminiApiKey!)
+      const genAI = new GoogleGenerativeAI(modelApiKey!)
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
       const base64Data = readFileAsBase64(verificationImage)

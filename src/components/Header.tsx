@@ -60,8 +60,7 @@ const web3auth = new Web3Auth({
   }
 });
 
-console.log("web3auth", web3auth);
-
+// console.log("web3auth", web3auth);
 interface HeaderProps {
   onMenuClick: () => void;
   totalEarnings: number;
@@ -76,8 +75,6 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
   const isMobile = useMediaQuery("(max-width: 768px)")
   const [balance, setBalance] = useState(0)
   const pathname = usePathname()
-
-  console.log('user info', userInfo);
 
   useEffect(() => {
     const init = async () => {
@@ -164,7 +161,14 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
       if (user.email) {
         localStorage.setItem('userEmail', user.email);
         try {
-          await createUser(user.email, user.name || 'Anonymous User');
+          const existingUser = await getUserByEmail(user.email);
+          if (existingUser) {
+            console.log("Login successful, user found:", existingUser);
+            return;
+          } else {
+            await createUser(user.email, user.name || 'Anonymous User');
+            console.log("User created:", user);
+          }
         } catch (error) {
           console.error("Error creating user:", error);
         }
@@ -175,6 +179,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
   };
 
   const logout = async () => {
+    console.log("Logging out...");
     if (!web3auth) {
       console.log("web3auth not initialized yet");
       return;
@@ -185,6 +190,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
       setLoggedIn(false);
       setUserInfo(null);
       localStorage.removeItem('userEmail');
+      console.log("Logged out successfully");
     } catch (error) {
       console.error("Error during logout:", error);
     }

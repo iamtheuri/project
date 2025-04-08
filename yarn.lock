@@ -1762,10 +1762,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@google/generative-ai@npm:^0.17.1":
-  version: 0.17.2
-  resolution: "@google/generative-ai@npm:0.17.2"
-  checksum: 10c0/41b7b247e7bf658238bd23c2e24fe57542782521f39bea982158ab6e9d3086ab38292c1d7c1667cbbf596bfe7866f4340b37903f0d8bc029f57bede7dff343c7
+"@google/generative-ai@npm:^0.24.0":
+  version: 0.24.0
+  resolution: "@google/generative-ai@npm:0.24.0"
+  checksum: 10c0/31452bf2653cdee7fd61eb209f16ac0ef82c94c4175909ba40e1088e938e3e19e01f628dfb80d429dae3338fc8487e9a0fd8a6ff0164189f2722211175690b0b
   languageName: node
   linkType: hard
 
@@ -3787,7 +3787,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-google-maps/api@npm:^2.19.3":
+"@react-google-maps/api@npm:^2.20.6":
   version: 2.20.6
   resolution: "@react-google-maps/api@npm:2.20.6"
   dependencies:
@@ -9946,7 +9946,7 @@ __metadata:
     "@babel/runtime": "npm:^7.27.0"
     "@chainlink/contracts": "npm:^1.2.0"
     "@ethsign/sp-sdk": "npm:^0.7.2"
-    "@google/generative-ai": "npm:^0.17.1"
+    "@google/generative-ai": "npm:^0.24.0"
     "@layerzerolabs/lz-evm-oapp-v2": "npm:^3.0.83"
     "@layerzerolabs/lz-evm-protocol-v2": "npm:^3.0.83"
     "@lit-protocol/lit-node-client": "npm:^6.4.10"
@@ -9966,7 +9966,7 @@ __metadata:
     "@radix-ui/react-slot": "npm:^1.1.0"
     "@radix-ui/react-switch": "npm:^1.1.0"
     "@radix-ui/react-toast": "npm:^1.2.6"
-    "@react-google-maps/api": "npm:^2.19.3"
+    "@react-google-maps/api": "npm:^2.20.6"
     "@typechain/ethers-v6": "npm:^0.5.0"
     "@typechain/hardhat": "npm:^9.0.0"
     "@types/chai": "npm:^4.2.0"

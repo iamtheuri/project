@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Send, Loader2 } from "lucide-react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type Message = {
   role: "user" | "assistant";
@@ -9,6 +10,7 @@ type Message = {
 };
 
 export default function MessagesPage() {
+  usePageTitle("Messages");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

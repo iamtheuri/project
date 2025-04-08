@@ -2,8 +2,10 @@
 import { useState } from "react";
 import { Upload, CheckCircle, XCircle, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function VerifyWastePage() {
+  usePageTitle("Verify Waste");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<

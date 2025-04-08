@@ -12,14 +12,18 @@ import {
   getRecentReports,
 } from "@/utils/db/actions";
 import { useRouter } from "next/navigation";
-import { toast } from "react-hot-toast";
+// import { toast } from "react-hot-toast";
+import { useToast } from "@/components/hooks/use-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
-const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+const modelApiKey = process.env.NEXT_PUBLIC_MODEL_API_KEY;
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 const libraries: Libraries = ["places"];
 
 export default function ReportPage() {
+  usePageTitle("Report Waste");
   const [user, setUser] = useState<{
     id: number;
     email: string;
@@ -115,7 +119,7 @@ export default function ReportPage() {
     setVerificationStatus("verifying");
 
     try {
-      const genAI = new GoogleGenerativeAI(geminiApiKey!);
+      const genAI = new GoogleGenerativeAI(modelApiKey!);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const base64Data = await readFileAsBase64(file);
@@ -173,10 +177,17 @@ export default function ReportPage() {
     }
   };
 
+  const { toast } = useToast();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (verificationStatus !== "success" || !user) {
-      toast.error("Please verify the waste before submitting or log in.");
+      // toast.error("Please verify the waste before submitting or log in.");
+      toast({
+        title: "Error",
+        description: "Please verify the waste before submitting",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -206,12 +217,22 @@ export default function ReportPage() {
       setVerificationStatus("idle");
       setVerificationResult(null);
 
-      toast.success(
-        `Report submitted successfully! You've earned points for reporting waste.`
-      );
+      // toast.success(
+      //   `Report submitted successfully! You've earned points for reporting waste.`
+      // );
+      toast({
+        title: "Success",
+        description: "Report submitted successfully! You've earned points for reporting waste.",
+        variant: "default",
+      });
     } catch (error) {
       console.error("Error submitting report:", error);
-      toast.error("Failed to submit report. Please try again.");
+      // toast.error("Failed to submit report. Please try again.");
+      toast({
+        title: "Error",
+        description: "Failed to submit report. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
