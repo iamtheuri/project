@@ -35,7 +35,6 @@ export default function CollectPage() {
     const fetchUserAndTasks = async () => {
       setLoading(true)
       try {
-        // Fetch user
         const userEmail = localStorage.getItem('userEmail')
         if (userEmail) {
           const fetchedUser = await getUserByEmail(userEmail)
@@ -43,14 +42,11 @@ export default function CollectPage() {
             setUser(fetchedUser)
           } else {
             toast.error('User not found. Please log in again.')
-            // Redirect to login page or handle this case appropriately
           }
         } else {
           toast.error('User not logged in. Please log in.')
-          // Redirect to login page or handle this case appropriately
         }
 
-        // Fetch tasks
         const fetchedTasks = await getWasteCollectionTasks()
         setTasks(fetchedTasks as CollectionTask[])
       } catch (error) {
@@ -129,44 +125,56 @@ export default function CollectPage() {
         {
           inlineData: {
             data: base64Data,
-            mimeType: 'image/jpeg', // Adjust this if you know the exact type
+            mimeType: 'image/jpeg',
           },
         },
       ]
 
       const prompt = `You are an expert in waste management and recycling. Analyze this image and provide:
-        1. Confirm if the waste type matches: ${selectedTask.wasteType}
-        2. Estimate if the quantity matches: ${selectedTask.amount}
-        3. Your confidence level in this assessment (as a percentage)
-        
-        Respond in JSON format like this:
-        {
-          "wasteTypeMatch": true/false,
-          "quantityMatch": true/false,
-          "confidence": confidence level as a number between 0 and 1
-        }`
+  1. Confirm if the waste type matches: ${selectedTask.wasteType}
+  2. Estimate the quantity visible in the image and determine if it matches the reported amount: ${selectedTask.amount}
+  3. Your confidence level in this assessment (as a percentage)
+  
+  For quantity comparison:
+  - If the amount is in weight (kg/lbs), estimate the total weight in the image
+  - If the amount is in items (pieces/bags), count the visible items
+  - Consider the scale and perspective of the image
+  
+  Respond in JSON format like this:
+  {
+    "wasteTypeMatch": true/false,
+    "quantityMatch": true/false,
+    "confidence": confidence level as a number between 0 and 1,
+    "estimatedQuantity": "your estimate of the visible quantity",
+    "requestedQuantity": "${selectedTask.amount}"
+  }`
 
       const result = await model.generateContent([prompt, ...imageParts])
       const response = await result.response
-      const text = response.text()
+      let text = response.text()
+      text = text
+        .replace(/^[\s\S]*?\{/, '{') // Remove stuff before the first {
+        .replace(/\}[\s\S]*$/, '}')  // Remove stuff after the last }
+        .trim();
+      console.log("Cleaned response:", text);
 
       try {
         const parsedResult = JSON.parse(text)
+        console.log("Verification result:", parsedResult)
         setVerificationResult({
           wasteTypeMatch: parsedResult.wasteTypeMatch,
           quantityMatch: parsedResult.quantityMatch,
           confidence: parsedResult.confidence
         })
+
         setVerificationStatus('success')
+        const isQuantityMatch = parsedResult.quantityMatch ||
+          (parsedResult.confidence > 0.6 && parsedResult.wasteTypeMatch);
 
-        if (parsedResult.wasteTypeMatch && parsedResult.quantityMatch && parsedResult.confidence > 0.7) {
+        if (parsedResult.wasteTypeMatch && isQuantityMatch && parsedResult.confidence > 0.6) {
           await handleStatusChange(selectedTask.id, 'verified')
-          const earnedReward = Math.floor(Math.random() * 50) + 10 // Random reward between 10 and 59
-
-          // Save the reward
+          const earnedReward = Math.floor(Math.random() * 50) + 10
           await saveReward(user.id, earnedReward)
-
-          // Save the collected waste
           await saveCollectedWaste(selectedTask.id, user.id, parsedResult)
 
           setReward(earnedReward)
@@ -360,13 +368,6 @@ export default function CollectPage() {
           </div>
         </div>
       )}
-
-      {/* Add a conditional render to show user info or login prompt */}
-      {/* {user ? (
-        <p className="text-sm text-gray-600 mb-4">Logged in as: {user.name}</p>
-      ) : (
-        <p className="text-sm text-red-600 mb-4">Please log in to collect waste and earn rewards.</p>
-      )} */}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { Poppins } from 'next/font/google'
 import Link from 'next/link'
 import ContractInteraction from '@/components/ContractInteraction'
 import { getRecentReports, getAllRewards, getWasteCollectionTasks } from '@/utils/db/actions'
+import { usePageTitle } from '@/hooks/usePageTitle'
 const poppins = Poppins({
   weight: ['300', '400', '600'],
   subsets: ['latin'],
@@ -33,8 +34,7 @@ export default function Home() {
     tokensEarned: 0,
     co2Offset: 0
   });
-
-
+  usePageTitle("Home");
 
   useEffect(() => {
     async function fetchImpactData() {

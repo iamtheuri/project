@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from 'next/navigation'
 import { Button } from "@/components/ui/button"
-import { Menu, Coins, Leaf, Search, Bell, User, ChevronDown, LogIn, LogOut } from "lucide-react"
+import { Menu, Coins, Leaf, Search, Bell, User, ChevronDown, LogIn, LogOut, Loader } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +17,8 @@ import { CHAIN_NAMESPACES, IProvider, WEB3AUTH_NETWORK } from "@web3auth/base"
 import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { createUser, getUnreadNotifications, markNotificationAsRead, getUserByEmail, getUserBalance } from "@/utils/db/actions"
+import { Skeleton } from "./ui/skeleton"
+import { useToast } from "@/components/hooks/use-toast";
 
 const clientId = process.env.NEXT_PUBLIC_WEB3_AUTH_CLIENT_ID;
 
@@ -67,6 +69,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
   const [provider, setProvider] = useState<IProvider | null>(null);
@@ -158,12 +161,16 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
       setLoggedIn(true);
       const user = await web3auth.getUserInfo();
       setUserInfo(user);
+      toast({
+        title: "Success",
+        description: "Login successful",
+        variant: "default",
+      });
       if (user.email) {
         localStorage.setItem('userEmail', user.email);
         try {
           const existingUser = await getUserByEmail(user.email);
           if (existingUser) {
-            console.log("Login successful, user found:", existingUser);
             return;
           } else {
             await createUser(user.email, user.name || 'Anonymous User');
@@ -174,6 +181,11 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
         }
       }
     } catch (error) {
+      toast({
+        title: "Error",
+        description: "Login failed",
+        variant: "destructive",
+      });
       console.error("Error during login:", error);
     }
   };
@@ -190,8 +202,17 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
       setLoggedIn(false);
       setUserInfo(null);
       localStorage.removeItem('userEmail');
-      console.log("Logged out successfully");
+      toast({
+        title: "Success",
+        description: "Logged out successfully",
+        variant: "default",
+      });
     } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error during logout",
+        variant: "destructive",
+      });
       console.error("Error during logout:", error);
     }
   };
@@ -219,7 +240,12 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
   };
 
   if (loading) {
-    return <div>Loading Web3Auth...</div>;
+    return (
+      <div className="flex items-center space-x-4 my-2 mx-auto sm:max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Skeleton className="w-[40px] h-[40px] rounded-full" />
+        <Skeleton className="w-[800px] h-[40px] rounded-md" />
+      </div>
+    );
   }
 
   return (
