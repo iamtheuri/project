@@ -1,4 +1,4 @@
-import { db } from "./dbConfig";
+import { db } from "@/utils/db/dbConfig";
 import {
   Users,
   Reports,
@@ -6,22 +6,9 @@ import {
   CollectedWastes,
   Notifications,
   Transactions,
-} from "./schema";
-import { eq, sql, and, desc, ne } from "drizzle-orm";
-
-export async function createUser(email: string, name: string) {
-  try {
-    const [user] = await db
-      .insert(Users)
-      .values({ email, name })
-      .returning()
-      .execute();
-    return user;
-  } catch (error) {
-    console.error("Error creating user:", error);
-    return null;
-  }
-}
+} from "@/utils/db/schema";
+import { eq, sql, and, desc } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 export async function getUserByEmail(email: string) {
   try {
@@ -37,19 +24,62 @@ export async function getUserByEmail(email: string) {
   }
 }
 
+export async function createUser(
+  email: string,
+  name: string,
+  password?: string,
+  role: string = "Reporter" // Default to Reporter
+) {
+  try {
+    const userData: {
+      email: string;
+      name: string;
+      password?: string;
+      role?: string;
+    } = { email, name, role };
+
+    if (password) {
+      userData.password = await bcrypt.hash(password, 12);
+    }
+
+    const [user] = await db
+      .insert(Users)
+      .values(userData)
+      .returning()
+      .execute();
+
+    return user;
+  } catch (error) {
+    console.error("Error creating user:", error);
+    throw error;
+  }
+}
+
 export async function updateUserDetails(
   userId: number,
   name: string,
-  email: string
+  email: string,
+  newPassword?: string
 ) {
   try {
+    const updateData: {
+      name: string;
+      email: string;
+      updatedAt: Date;
+      password?: string;
+    } = {
+      name,
+      email,
+      updatedAt: new Date(),
+    };
+
+    if (newPassword) {
+      updateData.password = await bcrypt.hash(newPassword, 12);
+    }
+
     const [updatedUser] = await db
       .update(Users)
-      .set({
-        name,
-        email,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(Users.id, userId))
       .returning()
       .execute();
@@ -57,6 +87,19 @@ export async function updateUserDetails(
     return updatedUser;
   } catch (error) {
     console.error("Error updating user details:", error);
+    throw error;
+  }
+}
+
+export async function verifyCredentials(email: string, password: string) {
+  try {
+    const user = await getUserByEmail(email);
+    if (!user || !user.password) return null;
+
+    const isValid = await bcrypt.compare(password, user.password);
+    return isValid ? user : null;
+  } catch (error) {
+    console.error("Error verifying credentials:", error);
     throw error;
   }
 }

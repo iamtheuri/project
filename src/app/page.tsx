@@ -8,11 +8,12 @@ import Link from 'next/link'
 import ContractInteraction from '@/components/ContractInteraction'
 import { getRecentReports, getAllRewards, getWasteCollectionTasks } from '@/utils/db/actions'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { AuthModal } from '@/components/AuthModal'
 const poppins = Poppins({
   weight: ['300', '400', '600'],
   subsets: ['latin'],
   display: 'swap',
-})
+});
 
 function AnimatedGlobe() {
   return (
@@ -34,6 +35,7 @@ export default function Home() {
     tokensEarned: 0,
     co2Offset: 0
   });
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   usePageTitle("Home");
 
   useEffect(() => {
@@ -73,9 +75,9 @@ export default function Home() {
     fetchImpactData();
   }, []);
 
-  const login = () => {
-    setLoggedIn(true);
-  };
+  // const login = () => {
+  //   setLoggedIn(true);
+  // };
 
   return (
     <div className={`container mx-auto px-4 py-16 ${poppins.className}`}>
@@ -88,10 +90,24 @@ export default function Home() {
           Join our community in making waste management more efficient and rewarding!
         </p>
         {!loggedIn ? (
-          <Button onClick={login} className="bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
-            Get Started
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Button>
+          <>
+            <Button
+              onClick={() => setAuthModalOpen(true)}
+
+              className="bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
+              Get Started
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+            <AuthModal
+              open={authModalOpen}
+              onOpenChange={setAuthModalOpen}
+              onSuccess={(user) => {
+                setLoggedIn(true)
+                setUserInfo(user)
+                localStorage.setItem('userEmail', user.email)
+              }}
+            />
+          </>
         ) : (
           <Link href="/report">
             <Button className="bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full font-medium transition-all duration-300 ease-in-out transform hover:scale-105">

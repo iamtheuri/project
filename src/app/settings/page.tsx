@@ -29,6 +29,7 @@ export default function SettingsPage() {
     const fetchUser = async () => {
       try {
         const userEmail = localStorage.getItem("userEmail");
+        console.log("userEmail", userEmail);
         if (!userEmail) {
           setError("No user email found");
           return;

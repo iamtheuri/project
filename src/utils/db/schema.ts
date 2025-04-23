@@ -13,7 +13,9 @@ import {
 export const Users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: varchar("email", { length: 255 }).notNull().unique(),
-  name: varchar("name", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(), // [Reporter,Collector,Admin,Authority]
+  password: varchar("password", { length: 255 }), // Nullable for SSO users
+  role: varchar("role", { length: 50 }).notNull().default("Reporter"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -42,12 +44,12 @@ export const Rewards = pgTable("rewards", {
     .notNull(),
   points: integer("points").notNull().default(0),
   level: integer("level").notNull().default(1),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  collectionInfo: text("collection_info").notNull(),
+  isAvailable: boolean("is_available").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  isAvailable: boolean("is_available").notNull().default(true),
-  description: text("description"),
-  name: varchar("name", { length: 255 }).notNull(),
-  collectionInfo: text("collection_info").notNull(),
 });
 
 // CollectedWastes table
@@ -75,7 +77,7 @@ export const Notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// New Transactions table
+// Transactions table
 export const Transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")

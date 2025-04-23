@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from 'next/navigation'
+import { redirect, usePathname } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Menu, Coins, Leaf, Search, Bell, User, ChevronDown, LogIn, LogOut, Loader } from "lucide-react"
 import {
@@ -19,6 +19,17 @@ import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { createUser, getUnreadNotifications, markNotificationAsRead, getUserByEmail, getUserBalance } from "@/utils/db/actions"
 import { Skeleton } from "./ui/skeleton"
 import { useToast } from "@/components/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AuthModal } from '@/components/AuthModal'
+import { Router } from "next/router"
 
 const clientId = process.env.NEXT_PUBLIC_WEB3_AUTH_CLIENT_ID;
 
@@ -37,7 +48,6 @@ const chainConfig = {
   tickerName: "Ethereum",
   logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
 };
-
 
 const privateKeyProvider = new EthereumPrivateKeyProvider({
   config: { chainConfig },
@@ -62,7 +72,6 @@ const web3auth = new Web3Auth({
   }
 });
 
-// console.log("web3auth", web3auth);
 interface HeaderProps {
   onMenuClick: () => void;
   totalEarnings: number;
@@ -75,9 +84,11 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
   const [provider, setProvider] = useState<IProvider | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const isMobile = useMediaQuery("(max-width: 768px)")
   const [balance, setBalance] = useState(0)
   const pathname = usePathname()
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -121,7 +132,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
 
     fetchNotifications();
 
-    const notificationInterval = setInterval(fetchNotifications, 60000); // Check every 60 seconds for new notifications
+    const notificationInterval = setInterval(fetchNotifications, 60000);
 
     return () => clearInterval(notificationInterval);
   }, [userInfo]);
@@ -150,6 +161,15 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
     };
   }, [userInfo]);
 
+  useEffect(() => {
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const userEmail = localStorage.getItem('userEmail');
+
+    if (isLoggedIn && userEmail) {
+      setLoggedIn(true);
+    }
+  }, []);
+
   const login = async () => {
     if (!web3auth) {
       console.log("Web3auth not initialized yet");
@@ -170,16 +190,14 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
         localStorage.setItem('userEmail', user.email);
         try {
           const existingUser = await getUserByEmail(user.email);
-          if (existingUser) {
-            return;
-          } else {
+          if (!existingUser) {
             await createUser(user.email, user.name || 'Anonymous User');
-            console.log("User created:", user);
           }
         } catch (error) {
           console.error("Error creating user:", error);
         }
       }
+      setAuthModalOpen(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -192,28 +210,41 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
 
   const logout = async () => {
     console.log("Logging out...");
-    if (!web3auth) {
-      console.log("web3auth not initialized yet");
-      return;
-    }
     try {
-      await web3auth.logout();
+      if (web3auth?.logout) {
+        try {
+          await web3auth.logout();
+        } catch (web3authError) {
+          console.warn("Web3Auth logout error:", web3authError);
+        }
+      }
+
       setProvider(null);
       setLoggedIn(false);
       setUserInfo(null);
+      setBalance(0);
       localStorage.removeItem('userEmail');
+      sessionStorage.clear();
+
+      document.cookie.split(";").forEach((c) => {
+        document.cookie = c
+          .replace(/^ +/, "")
+          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+      });
+
       toast({
         title: "Success",
         description: "Logged out successfully",
         variant: "default",
       });
+
     } catch (error) {
+      console.error("Error during logout:", error);
       toast({
         title: "Error",
         description: "Error during logout",
         variant: "destructive",
       });
-      console.error("Error during logout:", error);
     }
   };
 
@@ -285,7 +316,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="mr-2 relative">
                 <Bell className="h-5 w-5" />
-                {notifications.length > 0 && (
+                {loggedIn && notifications.length > 0 && (
                   <Badge className="absolute -top-1 -right-1 px-1 min-w-[1.2rem] h-5">
                     {notifications.length}
                   </Badge>
@@ -317,10 +348,43 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
             </span>
           </div>
           {!loggedIn ? (
-            <Button onClick={login} className="bg-green-600 hover:bg-green-700 text-white text-sm md:text-base">
-              Login
-              <LogIn className="ml-1 md:ml-2 h-4 w-4 md:h-5 md:w-5" />
-            </Button>
+            <>
+              <div className="flex flex-row gap-4">
+                <Button
+                  onClick={() => setAuthModalOpen(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white text-sm md:text-base px-4"
+                >
+                  Login
+                  <LogIn className="ml-1 md:ml-2 h-4 w-4 md:h-5 md:w-5" />
+                </Button>
+
+                <Button
+                  onClick={login}
+                  variant="outline"
+                  className="w-full px-4"
+                  disabled={isLoading}
+                >
+                  SSO
+                  <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                  </svg>
+                </Button>
+              </div>
+
+              <AuthModal
+                open={authModalOpen}
+                onOpenChange={setAuthModalOpen}
+                // onWeb3AuthLogin={login}
+                onSuccess={(user) => {
+                  setLoggedIn(true)
+                  setUserInfo(user)
+                  localStorage.setItem('userEmail', user.email)
+                }}
+              />
+            </>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -330,8 +394,8 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={getUserInfo}>
-                  {userInfo ? userInfo.name : "Fetch User Info"}
+                <DropdownMenuItem>
+                  {userInfo ? userInfo.name : "User"}
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Link href="/settings">Profile</Link>
