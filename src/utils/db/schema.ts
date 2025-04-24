@@ -7,6 +7,7 @@ import {
   timestamp,
   jsonb,
   boolean,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 // Users table
@@ -27,6 +28,8 @@ export const Reports = pgTable("reports", {
     .references(() => Users.id)
     .notNull(),
   location: text("location").notNull(),
+  latitude: numeric("latitude").notNull().default("0"),
+  longitude: numeric("longitude").notNull().default("0"),
   wasteType: varchar("waste_type", { length: 255 }).notNull(),
   amount: varchar("amount", { length: 255 }).notNull(),
   imageUrl: text("image_url"),

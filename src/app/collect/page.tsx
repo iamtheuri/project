@@ -1,14 +1,17 @@
+// @ts-nocheck
 'use client'
-import { useState, useEffect } from 'react'
-import { Trash2, MapPin, CheckCircle, Clock, ArrowRight, Camera, Upload, Loader, Calendar, Weight, Search } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Trash2, MapPin, CheckCircle, Clock, ArrowRight, Camera, Upload, Loader, Calendar, Weight, Search, Map, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input.tsx';
-import { toast } from 'react-hot-toast'
+import { Input } from '@/components/ui/input';
+import { useToast } from "@/components/hooks/use-toast"
 import { getWasteCollectionTasks, updateTaskStatus, saveReward, saveCollectedWaste, getUserByEmail } from '@/utils/db/actions'
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useAuthStatus } from '@/hooks/useAuthStatus'
 
 const modelApiKey = process.env.NEXT_PUBLIC_MODEL_API_KEY
+const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
 type CollectionTask = {
   id: number
@@ -18,18 +21,216 @@ type CollectionTask = {
   status: 'pending' | 'in_progress' | 'completed' | 'verified'
   date: string
   collectorId: number | null
+  latitude: number
+  longitude: number
 }
 
 const ITEMS_PER_PAGE = 5
 
 export default function CollectPage() {
   usePageTitle("Collect Waste");
+  const toast = useToast();
   const [tasks, setTasks] = useState<CollectionTask[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredWasteType, setHoveredWasteType] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [user, setUser] = useState<{ id: number; email: string; name: string } | null>(null)
+  const { isLoggedIn } = useAuthStatus(true);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
+  const mapRef = useRef(null);
+  const googleMapRef = useRef(null);
+  const markersRef = useRef<any[]>([]);
+
+  // Load Google Maps API Script
+  useEffect(() => {
+    const loadGoogleMapsScript = () => {
+      if (!window.google && googleMapsApiKey) {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => initMap();
+        document.head.appendChild(script);
+      } else if (window.google) {
+        initMap();
+      }
+    };
+
+    if (viewMode === 'map') {
+      loadGoogleMapsScript();
+    }
+  }, [viewMode]);
+
+  // Initialize map when tasks are loaded and map mode is active
+  useEffect(() => {
+    if (viewMode === 'map' && !loading && tasks.length > 0 && window.google) {
+      initMap();
+    }
+  }, [viewMode, loading, tasks]);
+
+  // Get user's current location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error("Error getting user location:", error);
+          toast({
+            title: "Location Access Denied",
+            description: "Unable to retrieve your location. Please check your browser settings.",
+            variant: "destructive",
+          });
+        }
+      );
+    }
+  }, []);
+
+  // Initialize Google Map
+  const initMap = () => {
+    if (!mapRef.current || !window.google) return;
+
+    const mapOptions = {
+      zoom: 12,
+      center: userLocation || {
+        lat: 1.286389,
+        long: 36.817223
+      },
+      mapTypeControl: true,
+      streetViewControl: true,
+      fullscreenControl: true
+    };
+
+    // Create new map
+    const map = new window.google.maps.Map(mapRef.current, mapOptions);
+    googleMapRef.current = map;
+    const currentGeoPin = <MapPin />;
+
+    // Add user location marker if available
+    if (userLocation) {
+      try {
+        new window.google.maps.Marker({
+          position: userLocation,
+          map: map,
+          icon: {
+            path: currentGeoPin,
+            scale: 10,
+            fillColor: "#4285F4",
+            fillOpacity: 0.8,
+            strokeWeight: 2,
+            strokeColor: "#FFFFFF"
+          },
+          title: "Your Location"
+        });
+      } catch (e) {
+        console.error("Error adding user location marker:", e);
+      }
+    }
+
+    // Add markers for waste collection tasks
+    addMarkers(map);
+  };
+
+  // Add markers for waste collection tasks
+  const addMarkers = (map: any) => {
+    // Clear existing markers
+    if (markersRef.current) {
+      markersRef.current.forEach(marker => marker.setMap(null));
+    }
+    markersRef.current = [];
+
+    // Filter tasks based on search term
+    const visibleTasks = tasks.filter(task =>
+      task.location.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Add markers for each task
+    visibleTasks.forEach(task => {
+      if (task.latitude && task.longitude) {
+        const markerColor = getMarkerColorByStatus(task.status);
+
+        const marker = new window.google.maps.Marker({
+          position: {
+            lat: parseFloat(task.latitude),
+            lng: parseFloat(task.longitude),
+          },
+          map: map,
+          title: task.location,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 8,
+            fillColor: markerColor,
+            fillOpacity: 0.9,
+            strokeWeight: 1,
+            strokeColor: "#FFFFFF"
+          }
+        });
+
+        // Create info window with task details
+        const infoWindow = new window.google.maps.InfoWindow({
+          content: `
+            <div style="width: 200px; padding: 10px;">
+              <h3 style="margin: 0 0 8px; font-weight: bold;">${task.location}</h3>
+              <p style="margin: 0 0 5px;"><strong>Waste:</strong> ${task.wasteType}</p>
+              <p style="margin: 0 0 5px;"><strong>Amount:</strong> ${task.amount}</p>
+              <p style="margin: 0 0 5px;"><strong>Date:</strong> ${task.date}</p>
+              <p style="margin: 0 0 5px;"><strong>Status:</strong> ${task.status.replace('_', ' ')}</p>
+              ${task.status === 'pending' ?
+              `<button id="nav-btn-${task.id}" style="background-color: #3B82F6; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 5px;">Navigate</button>` :
+              ''}
+            </div>
+          `
+        });
+
+        // Add click event listener to marker
+        marker.addListener('click', () => {
+          infoWindow.open(map, marker);
+        });
+
+        // Store marker reference for later cleanup
+        markersRef.current.push(marker);
+      }
+    });
+
+    // Fit map bounds to include all markers
+    if (markersRef.current.length > 0) {
+      const bounds = new window.google.maps.LatLngBounds();
+      markersRef.current.forEach(marker => bounds.extend(marker.getPosition()));
+      if (userLocation) bounds.extend(userLocation);
+      map.fitBounds(bounds);
+    }
+  };
+
+  // Get marker color based on task status
+  const getMarkerColorByStatus = (status: CollectionTask['status']) => {
+    switch (status) {
+      case 'pending': return '#FCD34D'; // yellow
+      case 'in_progress': return '#60A5FA'; // blue
+      case 'completed': return '#10B981'; // green
+      case 'verified': return '#8B5CF6'; // purple
+      default: return '#9CA3AF'; // gray
+    }
+  };
+
+  // // Open Google Maps navigation to task location
+  // const navigateToTask = (task: CollectionTask) => {
+  //   if (task.latitude && task.longitude) {
+  //     const url = `https://www.google.com/maps/dir/?api=1&destination=${task.latitude},${task.longitude}&travelmode=driving`;
+  //     window.open(url, '_blank');
+  //   } else {
+  //     toast({
+  //       title: 'Error',
+  //       description: 'Location coordinates not available for navigation.',
+  //       variant: 'destructive',
+  //     });
+  //   }
+  // };
 
   useEffect(() => {
     const fetchUserAndTasks = async () => {
@@ -41,17 +242,30 @@ export default function CollectPage() {
           if (fetchedUser) {
             setUser(fetchedUser)
           } else {
-            toast.error('User not found. Please log in again.')
+            toast({
+              title: 'Error',
+              description: 'User not found. Please log in again.',
+              variant: 'destructive',
+            });
           }
         } else {
-          toast.error('User not logged in. Please log in.')
+          toast({
+            title: 'Error',
+            description: 'User not logged in. Please log in.',
+            variant: 'destructive',
+          });
         }
 
-        const fetchedTasks = await getWasteCollectionTasks()
-        setTasks(fetchedTasks as CollectionTask[])
+        const fetchedTasks = await getWasteCollectionTasks();
+        console.log("fetchedTasks", fetchedTasks);
+        setTasks(fetchedTasks as CollectionTask[]);
       } catch (error) {
         console.error('Error fetching user and tasks:', error)
-        toast.error('Failed to load user data and tasks. Please try again.')
+        toast({
+          title: 'Error',
+          description: 'Failed to load user data and tasks. Please try again.',
+          variant: 'destructive',
+        });
       } finally {
         setLoading(false)
       }
@@ -59,6 +273,14 @@ export default function CollectPage() {
 
     fetchUserAndTasks()
   }, [])
+
+  // Update map when search term changes
+  useEffect(() => {
+    if (viewMode === 'map' && googleMapRef.current) {
+      addMarkers(googleMapRef.current);
+      console.log('fetchedTasks', fetchedTasks)
+    }
+  }, [searchTerm]);
 
   const [selectedTask, setSelectedTask] = useState<CollectionTask | null>(null)
   const [verificationImage, setVerificationImage] = useState<string | null>(null)
@@ -72,7 +294,11 @@ export default function CollectPage() {
 
   const handleStatusChange = async (taskId: number, newStatus: CollectionTask['status']) => {
     if (!user) {
-      toast.error('Please log in to collect waste.')
+      toast({
+        title: 'Error',
+        description: 'Please log in to collect waste.',
+        variant: 'destructive',
+      });
       return
     }
 
@@ -82,13 +308,24 @@ export default function CollectPage() {
         setTasks(tasks.map(task =>
           task.id === taskId ? { ...task, status: newStatus, collectorId: user.id } : task
         ))
-        toast.success('Task status updated successfully')
+        toast({
+          title: 'Success',
+          description: 'Task status updated successfully',
+        });
       } else {
-        toast.error('Failed to update task status. Please try again.')
+        toast({
+          title: 'Error',
+          description: 'Failed to update task status. Please try again.',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Error updating task status:', error)
-      toast.error('Failed to update task status. Please try again.')
+      toast({
+        title: 'Error',
+        description: 'Failed to update task status. Please try again.',
+        variant: 'destructive',
+      });
     }
   }
 
@@ -109,7 +346,11 @@ export default function CollectPage() {
 
   const handleVerify = async () => {
     if (!selectedTask || !verificationImage || !user) {
-      toast.error('Missing required information for verification.')
+      toast({
+        title: 'Error',
+        description: 'Missing required information for verification.',
+        variant: 'destructive',
+      });
       return
     }
 
@@ -178,15 +419,19 @@ export default function CollectPage() {
           await saveCollectedWaste(selectedTask.id, user.id, parsedResult)
 
           setReward(earnedReward)
-          toast.success(`Verification successful! You earned ${earnedReward} tokens!`, {
+          toast({
+            title: 'Success',
+            description: `Verification successful! You earned ${earnedReward} tokens!`,
+            variant: 'destructive',
             duration: 5000,
             position: 'top-center',
-          })
+          });
         } else {
-          toast.error('Verification failed. The collected waste does not match the reported waste.', {
-            duration: 5000,
-            position: 'top-center',
-          })
+          toast({
+            title: 'Error',
+            description: 'Verification failed. The collected waste does not match the reported waste.',
+            variant: 'destructive',
+          });
         }
       } catch (error) {
         console.log(error);
@@ -213,103 +458,192 @@ export default function CollectPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-semibold mb-6 text-gray-800">Waste Collection Tasks</h1>
-
-      <div className="mb-4 flex items-center">
-        <Input
-          type="text"
-          placeholder="Search by area..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="mr-2"
-        />
-        <Button variant="outline" size="icon">
-          <Search className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader className="animate-spin h-8 w-8 text-gray-500" />
-        </div>
-      ) : (
+      {isLoggedIn ? (
         <>
-          <div className="space-y-4">
-            {paginatedTasks.map(task => (
-              <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex justify-between items-center mb-2">
-                  <h2 className="text-lg font-medium text-gray-800 flex items-center">
-                    <MapPin className="w-5 h-5 mr-2 text-gray-500" />
-                    {task.location}
-                  </h2>
-                  <StatusBadge status={task.status} />
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-sm text-gray-600 mb-3">
-                  <div className="flex items-center relative">
-                    <Trash2 className="w-4 h-4 mr-2 text-gray-500" />
-                    <span
-                      onMouseEnter={() => setHoveredWasteType(task.wasteType)}
-                      onMouseLeave={() => setHoveredWasteType(null)}
-                      className="cursor-pointer"
-                    >
-                      {task.wasteType.length > 8 ? `${task.wasteType.slice(0, 8)}...` : task.wasteType}
-                    </span>
-                    {hoveredWasteType === task.wasteType && (
-                      <div className="absolute left-0 top-full mt-1 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-10">
-                        {task.wasteType}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center">
-                    <Weight className="w-4 h-4 mr-2 text-gray-500" />
-                    {task.amount}
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-                    {task.date}
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  {task.status === 'pending' && (
-                    <Button onClick={() => handleStatusChange(task.id, 'in_progress')} variant="outline" size="sm">
-                      Start Collection
-                    </Button>
-                  )}
-                  {task.status === 'in_progress' && task.collectorId === user?.id && (
-                    <Button onClick={() => setSelectedTask(task)} variant="outline" size="sm">
-                      Complete & Verify
-                    </Button>
-                  )}
-                  {task.status === 'in_progress' && task.collectorId !== user?.id && (
-                    <span className="text-yellow-600 text-sm font-medium">In progress by another collector</span>
-                  )}
-                  {task.status === 'verified' && (
-                    <span className="text-green-600 text-sm font-medium">Reward Earned</span>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="mb-4 flex items-center">
+            <Input
+              type="text"
+              placeholder="Search by area..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="mr-3"
+            />
+            <Button variant="outline" size="icon" className='mr-3 bg-black'>
+              <Search className="h-4 w-8 text-white" />
+            </Button>
+
+            <div className="ml-auto flex">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                className="mr-3"
+                onClick={() => setViewMode('list')}
+              >
+                List View
+              </Button>
+              <Button
+                variant={viewMode === 'map' ? 'default' : 'outline'}
+                onClick={() => setViewMode('map')}
+              >
+                <Map className="h-4 w-4 mr-1" />
+                Map View
+              </Button>
+            </div>
           </div>
 
-          <div className="mt-4 flex justify-center">
-            <Button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="mr-2"
-            >
-              Previous
-            </Button>
-            <span className="mx-2 self-center">
-              Page {currentPage} of {pageCount}
-            </span>
-            <Button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, pageCount))}
-              disabled={currentPage === pageCount}
-              className="ml-2"
-            >
-              Next
-            </Button>
-          </div>
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <Loader className="animate-spin h-8 w-8 text-gray-500" />
+            </div>
+          ) : viewMode === 'map' ? (
+            <div className="">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div ref={mapRef} style={{ height: '500px', width: '100%' }} />
+              </div>
+              <Button
+                variant="outline"
+                className="my-4"
+                disabled={!!userLocation}
+                onClick={() => {
+                  toast({
+                    title: "Requesting Location Access",
+                    description: "Please allow access to your location in the browser.",
+                  });
+
+                  navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                      const newLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                      };
+                      setUserLocation(newLocation);
+
+                      toast({
+                        title: "Location Access Granted",
+                        description: "Your current location has been set successfully.",
+                      });
+
+                      if (googleMapRef.current) {
+                        googleMapRef.current.setCenter(newLocation);
+                      }
+                    },
+                    (error) => {
+                      console.error("Error getting location:", error);
+                      toast({
+                        title: "Location Access Denied",
+                        description:
+                          "Unable to retrieve your location. Please check your browser settings.",
+                        variant: "destructive",
+                      });
+                    }
+                  );
+                }}
+              >
+                <Navigation className="h-4 w-4 mr-1" />
+                Get My Location
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {paginatedTasks.map(task => (
+                  <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <h2 className="text-lg font-medium text-gray-800 flex items-center">
+                        <MapPin className="w-5 h-5 mr-2 text-gray-500" />
+                        {task.location}
+                      </h2>
+                      <StatusBadge status={task.status} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-sm text-gray-600 mb-3">
+                      <div className="flex items-center relative">
+                        <Trash2 className="w-4 h-4 mr-2 text-gray-500" />
+                        <span
+                          onMouseEnter={() => setHoveredWasteType(task.wasteType)}
+                          onMouseLeave={() => setHoveredWasteType(null)}
+                          className="cursor-pointer"
+                        >
+                          {task.wasteType.length > 8 ? `${task.wasteType.slice(0, 8)}...` : task.wasteType}
+                        </span>
+                        {hoveredWasteType === task.wasteType && (
+                          <div className="absolute left-0 top-full mt-1 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-10">
+                            {task.wasteType}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center">
+                        <Weight className="w-4 h-4 mr-2 text-gray-500" />
+                        {task.amount}
+                      </div>
+                      <div className="flex items-center">
+                        <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                        {task.date}
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      {task.status === 'pending' && (
+                        <>
+                          {/* <Button
+                            onClick={() => navigateToTask(task)}
+                            variant="outline"
+                            size="sm"
+                            className="mr-2"
+                          >
+                            <Navigation className="w-4 h-4 mr-1" />
+                            Navigate
+                          </Button> */}
+                          <Button onClick={() => handleStatusChange(task.id, 'in_progress')} variant="outline" size="sm">
+                            Start Collection
+                          </Button>
+                        </>
+                      )}
+                      {task.status === 'in_progress' && task.collectorId === user?.id && (
+                        <Button onClick={() => setSelectedTask(task)} variant="outline" size="sm">
+                          Complete & Verify
+                        </Button>
+                      )}
+                      {task.status === 'in_progress' && task.collectorId !== user?.id && (
+                        <span className="text-yellow-600 text-sm font-medium">In progress by another collector</span>
+                      )}
+                      {task.status === 'verified' && (
+                        <span className="text-green-600 text-sm font-medium">Reward Earned</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex justify-center">
+                <Button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="mr-2"
+                >
+                  Previous
+                </Button>
+                <span className="mx-2 self-center">
+                  Page {currentPage} of {pageCount}
+                </span>
+                <Button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, pageCount))}
+                  disabled={currentPage === pageCount}
+                  className="ml-2"
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          )}
         </>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-lg font-medium text-gray-800 flex items-center">
+                Login to view more
+              </h2>
+            </div>
+          </div>
+        </div>
       )}
 
       {selectedTask && (

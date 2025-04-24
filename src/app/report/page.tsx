@@ -41,11 +41,20 @@ export default function ReportPage() {
     }>
   >([]);
 
-  const [newReport, setNewReport] = useState({
+  const [newReport, setNewReport] = useState<{
+    location: string;
+    type: string;
+    amount: string;
+    latitude: number | null;
+    longitude: number | null;
+  }>({
     location: "",
     type: "",
     amount: "",
+    latitude: null,
+    longitude: null,
   });
+
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -77,9 +86,12 @@ export default function ReportPage() {
       const places = searchBox.getPlaces();
       if (places && places.length > 0) {
         const place = places[0];
-        setNewReport((prev) => ({
+
+        setNewReport(prev => ({
           ...prev,
           location: place.formatted_address || "",
+          latitude: place.geometry?.location?.lat() ?? null,
+          longitude: place.geometry?.location?.lng() ?? null,
         }));
       }
     }
@@ -114,7 +126,14 @@ export default function ReportPage() {
   };
 
   const handleVerify = async () => {
-    if (!file) return;
+    if (!file) {
+      toast({
+        title: "Error",
+        description: "Please upload an image to verify.",
+        variant: "destructive",
+      });
+      return;
+    };
 
     setVerificationStatus("verifying");
 
@@ -194,6 +213,15 @@ export default function ReportPage() {
       return;
     }
 
+    if (newReport.latitude == null || newReport.longitude == null) {
+      toast({
+        title: "Missing coordinates",
+        description: "Please pick a location from the dropdown so we can get lat/long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const report = (await createReport(
@@ -201,6 +229,8 @@ export default function ReportPage() {
         newReport.location,
         newReport.type,
         newReport.amount,
+        newReport.latitude,
+        newReport.longitude,
         preview || undefined,
         verificationResult ? JSON.stringify(verificationResult) : undefined
       )) as any;
@@ -214,7 +244,7 @@ export default function ReportPage() {
       };
 
       setReports([formattedReport, ...reports]);
-      setNewReport({ location: "", type: "", amount: "" });
+      setNewReport({ location: "", type: "", amount: "", latitude: null, longitude: null, });
       setFile(null);
       setPreview(null);
       setVerificationStatus("idle");

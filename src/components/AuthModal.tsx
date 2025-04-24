@@ -146,7 +146,7 @@ export const AuthModal = ({
                   <Input
                     id="password"
                     type="password"
-                    value=""
+                    value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className="pl-10"
@@ -198,7 +198,7 @@ export const AuthModal = ({
                   <Input
                     id="reg-password"
                     type="password"
-                    value=""
+                    value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className="pl-10"

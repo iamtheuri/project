@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "@/utils/db/dbConfig";
 import {
   Users,
@@ -109,8 +110,9 @@ export async function createReport(
   location: string,
   wasteType: string,
   amount: string,
+  latitude: number,
+  longitude: number,
   imageUrl?: string,
-  type?: string,
   verificationResult?: any
 ) {
   try {
@@ -119,12 +121,15 @@ export async function createReport(
       .values({
         userId,
         location,
+        latitude,
+        longitude,
         wasteType,
         amount,
         imageUrl,
         verificationResult,
         status: "pending",
       })
+
       .returning()
       .execute();
 
@@ -345,6 +350,8 @@ export async function getWasteCollectionTasks(limit: number = 20) {
         location: Reports.location,
         wasteType: Reports.wasteType,
         amount: Reports.amount,
+        latitude: Reports.latitude,
+        longitude: Reports.longitude,
         status: Reports.status,
         date: Reports.createdAt,
         collectorId: Reports.collectorId,

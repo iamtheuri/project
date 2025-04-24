@@ -14,6 +14,7 @@ const poppins = Poppins({
   subsets: ['latin'],
   display: 'swap',
 });
+import { useAuthStatus } from '@/hooks/useAuthStatus'
 
 function AnimatedGlobe() {
   return (
@@ -28,7 +29,6 @@ function AnimatedGlobe() {
 }
 
 export default function Home() {
-  const [loggedIn, setLoggedIn] = useState(false);
   const [impactData, setImpactData] = useState({
     wasteCollected: 0,
     reportsSubmitted: 0,
@@ -36,6 +36,7 @@ export default function Home() {
     co2Offset: 0
   });
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const { isLoggedIn } = useAuthStatus(true);
   usePageTitle("Home");
 
   useEffect(() => {
@@ -75,10 +76,6 @@ export default function Home() {
     fetchImpactData();
   }, []);
 
-  // const login = () => {
-  //   setLoggedIn(true);
-  // };
-
   return (
     <div className={`container mx-auto px-4 py-16 ${poppins.className}`}>
       <section className="text-center mb-20">
@@ -89,11 +86,10 @@ export default function Home() {
         <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed mb-8">
           Join our community in making waste management more efficient and rewarding!
         </p>
-        {!loggedIn ? (
+        {!isLoggedIn ? (
           <>
             <Button
               onClick={() => setAuthModalOpen(true)}
-
               className="bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
               Get Started
               <ArrowRight className="ml-2 h-5 w-5" />
