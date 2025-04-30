@@ -1,3 +1,4 @@
+//@ts-nocheck
 "use client";
 import { useState, useCallback, useEffect } from "react";
 import { MapPin, Upload, CheckCircle, Loader } from "lucide-react";
@@ -14,6 +15,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/hooks/use-toast";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { useAuthStatus } from "@/lib/web3auth";
 
 
 const modelApiKey = process.env.NEXT_PUBLIC_MODEL_API_KEY;
@@ -37,6 +39,8 @@ export default function ReportPage() {
       location: string;
       wasteType: string;
       amount: string;
+      description: string;
+      recommendation: string;
       createdAt: string;
     }>
   >([]);
@@ -45,12 +49,16 @@ export default function ReportPage() {
     location: string;
     type: string;
     amount: string;
+    description: string;
+    recommendation: string;
     latitude: number | null;
     longitude: number | null;
   }>({
     location: "",
     type: "",
     amount: "",
+    description: "",
+    recommendation: "",
     latitude: null,
     longitude: null,
   });
@@ -58,12 +66,14 @@ export default function ReportPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<
-    "idle" | "verifying" | "success" | "failure"
-  >("idle");
+    "idle" | "verifying" | "success" | "failure" | "partial">("idle");
   const [verificationResult, setVerificationResult] = useState<{
     wasteType: string;
     quantity: string;
+    description: string;
+    recommendation: string;
     confidence: number;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,7 +139,7 @@ export default function ReportPage() {
     if (!file) {
       toast({
         title: "Error",
-        description: "Please upload an image to verify.",
+        description: "Upload must be an image.",
         variant: "destructive",
       });
       return;
@@ -140,6 +150,15 @@ export default function ReportPage() {
     try {
       const genAI = new GoogleGenerativeAI(modelApiKey!);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      // Add file validation before processing
+      if (!file || !file.type.startsWith('image/')) {
+        setVerificationStatus("failure");
+        throw new Error("Invalid file: Please upload an image");
+      }
+
+      // Show loading state to user
+      setVerificationStatus("verifying");
 
       const base64Data = await readFileAsBase64(file);
 
@@ -152,21 +171,47 @@ export default function ReportPage() {
         },
       ];
 
+      // Enhanced prompt with more specific instructions and edge cases
       const prompt = `You are an expert in waste management and recycling. Analyze this image and provide:
-      1. The type of waste (e.g., plastic, paper, glass, metal, organic)
+      1. The type of waste (e.g., plastic, paper, glass, metal, organic, electronic, hazardous, mixed)
       2. An estimate of the quantity or amount (in kg or liters)
       3. Your confidence level in this assessment (as a percentage)
+      4. A brief description of what you see in the image
+      5. Recommendations for proper disposal or recycling methods
       
-      Respond in JSON format ONLY, with NO additional text or markdown. The response must be valid JSON that can be directly parsed.
+      Please follow these guidelines:
+      - If the waste is packed in a bag, identify the type of bag (e.g., decomposable, non-decomposable) and specify if it contains waste.
+      - If the image is unclear or the waste is not visible, set confidence to 0.
+      - If you cannot determine the type of waste or if the image doesn't contain waste, set wasteType to "unidentified".
+      - If the waste is a common item (e.g., plastic bottle, cardboard box), provide a specific type (e.g., PET, cardboard).
+      - If the waste is a mixed item (e.g., a pizza box with food residue), provide a general type (e.g., mixed waste).
+      - If the waste is hazardous (e.g., batteries, chemicals), provide a specific type and disposal method as recommendation.
+      - If the waste is organic (e.g., food scraps, yard waste), provide a specific type and disposal method as recommendation.
+      - If the waste is electronic (e.g., old phone, computer), provide a specific type and disposal method as recommendation.
+      - If the waste is recyclable (e.g., glass, metal), provide a specific type and recycling method as recommendation.
+      - If the waste is not recyclable (e.g., plastic wrap, polystyrene), provide a specific type and disposal method.
+      
+      Respond in JSON format ONLY, with NO additional text or markdown. The response must be valid JSON.
       {
-        "wasteType": "type of waste",
-        "quantity": "estimated quantity with unit",
-        "confidence": confidence level as a number between 0 and 1
+        "wasteType": "Type of waste",
+        "quantity": "Estimated quantity with unit",
+        "confidence": Confidence level as a number between 0 and 1,
+        "description": "Brief description of what you see in the image (should not exceed 100 words)"
+        "recommendation": "Recommendations for proper disposal or recycling methods (should not exceed 100 words)"
       }`;
 
-      const result = await model.generateContent([prompt, ...imageParts]);
-      const response = await result.response;
+      // Set timeout for API call
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("API request timed out")), 15000)
+      );
+
+      const apiPromise = model.generateContent([prompt, ...imageParts]);
+      const result = await Promise.race([apiPromise, timeoutPromise]);
+
+      const response = result.response;
       let text = response.text();
+      const rawrepsonse = response.text();
+      console.log("Raw response:", rawrepsonse);
       text = text
         .replace(/^[\s\S]*?\{/, '{') // Remove stuff before the first {
         .replace(/\}[\s\S]*$/, '}')  // Remove stuff after the last }
@@ -175,29 +220,56 @@ export default function ReportPage() {
 
       try {
         const parsedResult = JSON.parse(text);
+
+        // Validate all required fields exist and have appropriate values
         if (
           parsedResult.wasteType &&
           parsedResult.quantity &&
-          parsedResult.confidence
+          parsedResult.description &&
+          parsedResult.recommendation &&
+          typeof parsedResult.confidence === 'number' &&
+          parsedResult.confidence >= 0 &&
+          parsedResult.confidence <= 1
         ) {
-          setVerificationResult(parsedResult);
-          setVerificationStatus("success");
-          setNewReport({
-            ...newReport,
-            type: parsedResult.wasteType,
-            amount: parsedResult.quantity,
+          setVerificationResult({
+            ...parsedResult,
+            // Standardize confidence as percentage for display
+            confidencePercent: Math.round(parsedResult.confidence * 100)
           });
+
+          // Only update report if confidence exceeds threshold
+          if (parsedResult.confidence >= 0.6 && parsedResult.wasteType !== "unidentified") {
+            setVerificationStatus("success");
+            setNewReport({
+              ...newReport,
+              type: parsedResult.wasteType,
+              amount: parsedResult.quantity,
+              description: parsedResult.description || "",
+              recommendation: parsedResult.recommendation || ""
+            });
+          } else {
+            // Still success but with warning
+            setVerificationStatus("partial");
+            setVerificationMessage(
+              parsedResult.wasteType === "unidentified"
+                ? "Unable to identify waste type. Please manually specify."
+                : "Low confidence detection. Please verify results."
+            );
+          }
         } else {
-          console.error("Invalid verification result:", parsedResult);
+          console.error("Invalid verification result structure:", parsedResult);
           setVerificationStatus("failure");
+          setVerificationMessage("Analysis produced invalid results. Please try again with a clearer image.");
         }
       } catch (error) {
         console.error("Failed to parse JSON response:", error, "Text:", text);
         setVerificationStatus("failure");
+        setVerificationMessage("Failed to process response. Please try again.");
       }
     } catch (error) {
       console.error("Error verifying waste:", error);
       setVerificationStatus("failure");
+      setVerificationMessage("Error analyzing image. Please try again.");
     }
   };
 
@@ -229,6 +301,8 @@ export default function ReportPage() {
         newReport.location,
         newReport.type,
         newReport.amount,
+        newReport.description,
+        newReport.recommendation,
         newReport.latitude,
         newReport.longitude,
         preview || undefined,
@@ -240,11 +314,21 @@ export default function ReportPage() {
         location: report.location,
         wasteType: report.wasteType,
         amount: report.amount,
+        description: report.description,
+        recommendation: report.recommendation,
         createdAt: report.createdAt.toISOString().split("T")[0],
       };
 
       setReports([formattedReport, ...reports]);
-      setNewReport({ location: "", type: "", amount: "", latitude: null, longitude: null, });
+      setNewReport({
+        location: "",
+        type: "",
+        amount: "",
+        description: "",
+        recommendation: "",
+        latitude: null,
+        longitude: null,
+      });
       setFile(null);
       setPreview(null);
       setVerificationStatus("idle");
@@ -283,193 +367,244 @@ export default function ReportPage() {
         }));
         setReports(formattedReports);
       } else {
-        router.push("/login");
+        toast({
+          title: "Error",
+          description: "Please in to report waste.",
+          variant: "destructive",
+        });
+        return;
       }
     };
     checkUser();
   }, [router]);
 
+  const { isLoggedIn } = useAuthStatus(true);
+
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-semibold mb-6 text-gray-800">
-        Report waste
-      </h1>
-
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-8 rounded-2xl shadow-lg mb-12"
-      >
-        <div className="mb-8">
-          <label
-            htmlFor="waste-image"
-            className="block text-lg font-medium text-gray-700 mb-2"
+      {isLoggedIn ? (
+        <>
+          <h1 className="text-3xl font-semibold mb-6 text-gray-800">
+            Report waste
+          </h1>
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white p-8 rounded-2xl shadow-lg mb-12"
           >
-            Upload Waste Image
-          </label>
-          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-green-500 transition-colors duration-300">
-            <div className="space-y-1 text-center">
-              <Upload className="mx-auto h-12 w-12 text-gray-400" />
-              <div className="flex text-sm text-gray-600">
-                <label
-                  htmlFor="waste-image"
-                  className="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-green-500"
-                >
-                  <span>Upload a file</span>
-                  <input
-                    id="waste-image"
-                    name="waste-image"
-                    type="file"
-                    className="sr-only"
-                    onChange={handleFileChange}
-                    accept="image/*"
-                  />
-                </label>
-                <p className="pl-1">or drag and drop</p>
-              </div>
-              <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-            </div>
-          </div>
-        </div>
-
-        {preview && (
-          <div className="mt-4 mb-8">
-            <img
-              src={preview}
-              alt="Waste preview"
-              className="max-w-full h-auto rounded-xl shadow-md"
-            />
-          </div>
-        )}
-
-        <Button
-          type="button"
-          onClick={handleVerify}
-          className="w-full mb-8 bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg rounded-xl transition-colors duration-300"
-          disabled={!file || verificationStatus === "verifying"}
-        >
-          {verificationStatus === "verifying" ? (
-            <>
-              <Loader className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
-              Verifying...
-            </>
-          ) : (
-            "Verify Waste"
-          )}
-        </Button>
-
-        {verificationStatus === "success" && verificationResult && (
-          <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-8 rounded-r-xl">
-            <div className="flex items-center">
-              <CheckCircle className="h-6 w-6 text-green-400 mr-3" />
-              <div>
-                <h3 className="text-lg font-medium text-green-800">
-                  Verification Successful
-                </h3>
-                <div className="mt-2 text-sm text-green-700">
-                  <p>Waste Type: {verificationResult.wasteType}</p>
-                  <p>Quantity: {verificationResult.quantity}</p>
-                  <p>
-                    Confidence:{" "}
-                    {(verificationResult.confidence * 100).toFixed(2)}%
-                  </p>
+            <div className="mb-8">
+              <label
+                htmlFor="waste-image"
+                className="block text-lg font-medium text-gray-700 mb-2"
+              >
+                Upload Waste Image
+              </label>
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-green-500 transition-colors duration-300">
+                <div className="space-y-1 text-center">
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="flex text-sm text-gray-600">
+                    <label
+                      htmlFor="waste-image"
+                      className="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-green-500"
+                    >
+                      <span>Upload a file</span>
+                      <input
+                        id="waste-image"
+                        name="waste-image"
+                        type="file"
+                        className="sr-only"
+                        onChange={handleFileChange}
+                        accept="image/*"
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
                 </div>
               </div>
             </div>
-          </div>
-        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          <div>
-            <label
-              htmlFor="location"
-              className="block text-sm font-medium text-gray-700 mb-1"
+            {preview && (
+              <div className="mt-4 mb-8">
+                <img
+                  src={preview}
+                  alt="Waste preview"
+                  className="max-w-full h-auto rounded-xl shadow-md"
+                />
+              </div>
+            )}
+
+            <Button
+              type="button"
+              onClick={handleVerify}
+              className="w-full mb-8 bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg rounded-xl transition-colors duration-300"
+              disabled={!file || verificationStatus === "verifying"}
             >
-              Location
-            </label>
-            {isLoaded ? (
-              <StandaloneSearchBox
-                onLoad={onLoad}
-                onPlacesChanged={onPlacesChanged}
-              >
+              {verificationStatus === "verifying" ? (
+                <>
+                  <Loader className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
+                  Verifying...
+                </>
+              ) : (
+                "Verify Waste"
+              )}
+            </Button>
+
+            {verificationStatus === "success" && verificationResult && (
+              <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-8 rounded-r-xl">
+                <div className="flex items-center">
+                  <CheckCircle className="h-6 w-6 text-green-400 mr-3" />
+                  <div>
+                    <h3 className="text-lg font-medium text-green-800">
+                      Verification Successful
+                    </h3>
+                    <div className="mt-2 text-sm text-green-700">
+                      <p>Waste Type: {verificationResult.wasteType}</p>
+                      <p>Quantity: {verificationResult.quantity}</p>
+                      <p>
+                        Confidence:{" "}
+                        {(verificationResult.confidence * 100).toFixed(2)}%
+                      </p>
+                      <p>Description: {verificationResult.description}</p>
+                      <p>Recommendation: {verificationResult.recommendation}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+              <div>
+                <label
+                  htmlFor="location"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Location
+                </label>
+                {isLoaded ? (
+                  <StandaloneSearchBox
+                    onLoad={onLoad}
+                    onPlacesChanged={onPlacesChanged}
+                  >
+                    <input
+                      type="text"
+                      id="location"
+                      name="location"
+                      value={newReport.location}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300"
+                      placeholder="Enter waste location"
+                    />
+                  </StandaloneSearchBox>
+                ) : (
+                  <input
+                    type="text"
+                    id="location"
+                    name="location"
+                    value={newReport.location}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300"
+                    placeholder="Enter waste location"
+                  />
+                )}
+              </div>
+              <div>
+                <label
+                  htmlFor="type"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Waste Type
+                </label>
                 <input
                   type="text"
-                  id="location"
-                  name="location"
-                  value={newReport.location}
+                  id="type"
+                  name="type"
+                  value={newReport.type}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300"
-                  placeholder="Enter waste location"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
+                  placeholder="Verified waste type"
+                  readOnly
                 />
-              </StandaloneSearchBox>
-            ) : (
-              <input
-                type="text"
-                id="location"
-                name="location"
-                value={newReport.location}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300"
-                placeholder="Enter waste location"
-              />
-            )}
-          </div>
-          <div>
-            <label
-              htmlFor="type"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Waste Type
-            </label>
-            <input
-              type="text"
-              id="type"
-              name="type"
-              value={newReport.type}
-              onChange={handleInputChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
-              placeholder="Verified waste type"
-              readOnly
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="amount"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Estimated Amount
-            </label>
-            <input
-              type="text"
-              id="amount"
-              name="amount"
-              value={newReport.amount}
-              onChange={handleInputChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
-              placeholder="Verified amount"
-              readOnly
-            />
-          </div>
-        </div>
-        <Button
-          type="submit"
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg rounded-xl transition-colors duration-300 flex items-center justify-center"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
-              Submitting...
-            </>
-          ) : (
-            "Submit Report"
-          )}
-        </Button>
-      </form>
+              </div>
+              <div>
+                <label
+                  htmlFor="amount"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Estimated Amount
+                </label>
+                <input
+                  type="text"
+                  id="amount"
+                  name="amount"
+                  value={newReport.amount}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
+                  placeholder="Verified amount"
+                  readOnly
+                />
+              </div>
 
+              <div>
+                <label
+                  htmlFor="description"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Waste Description
+                </label>
+                <textarea
+                  type="text"
+                  id="description"
+                  name="description"
+                  value={newReport.description}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
+                  placeholder="Description"
+                  readOnly
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="recommendation"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Disposal Recommendation
+                </label>
+                <textarea
+                  type="text"
+                  id="recommendation"
+                  name="recommendation"
+                  value={newReport.recommendation}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
+                  placeholder="Recommendation"
+                  readOnly
+                />
+              </div>
+            </div>
+            <Button
+              type="submit"
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg rounded-xl transition-colors duration-300 flex items-center justify-center"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Report"
+              )}
+            </Button>
+          </form>
+        </>
+      ) : (null)}
       <h2 className="text-3xl font-semibold mb-6 text-gray-800">
         Recent Reports
       </h2>

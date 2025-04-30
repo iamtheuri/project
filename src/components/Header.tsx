@@ -37,9 +37,9 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
   const [balance, setBalance] = useState(0);
   const pathname = usePathname();
 
-  // Use the auth status hook with debug mode
-  const { isLoggedIn, userEmail, userName, isLoading } = useAuthStatus(true);
 
+  // Use the auth status hook with debug mode
+  const { isLoggedIn, userEmail, userName, isLoading, checkAuthStatus } = useAuthStatus();
   // Initialize Web3Auth
   useEffect(() => {
     const init = async () => {
@@ -178,6 +178,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
         variant: "default",
       });
 
+      checkAuthStatus();
       setAuthModalOpen(false);
     } catch (error) {
       console.error("Error during login:", error);
@@ -215,6 +216,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
       });
     } finally {
       setLoggingOut(false);
+      checkAuthStatus();
       toast({
         title: "Success",
         description: "Logged out successfully",

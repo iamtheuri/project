@@ -110,6 +110,8 @@ export async function createReport(
   location: string,
   wasteType: string,
   amount: string,
+  description: string,
+  recommendation: string,
   latitude: number,
   longitude: number,
   imageUrl?: string,

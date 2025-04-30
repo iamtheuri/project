@@ -32,6 +32,10 @@ export const Reports = pgTable("reports", {
   longitude: numeric("longitude").notNull().default("0"),
   wasteType: varchar("waste_type", { length: 255 }).notNull(),
   amount: varchar("amount", { length: 255 }).notNull(),
+  description: varchar("description", { length: 255 }).notNull().default(""),
+  recommendation: varchar("recommendation", { length: 255 })
+    .notNull()
+    .default("Contact authorities"),
   imageUrl: text("image_url"),
   verificationResult: jsonb("verification_result"),
   status: varchar("status", { length: 255 }).notNull().default("pending"),

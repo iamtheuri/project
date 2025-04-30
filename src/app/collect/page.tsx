@@ -29,7 +29,7 @@ const ITEMS_PER_PAGE = 5
 
 export default function CollectPage() {
   usePageTitle("Collect Waste");
-  const toast = useToast();
+  const { toast } = useToast();
   const [tasks, setTasks] = useState<CollectionTask[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredWasteType, setHoveredWasteType] = useState<string | null>(null)
@@ -154,6 +154,14 @@ export default function CollectPage() {
     visibleTasks.forEach(task => {
       if (task.latitude && task.longitude) {
         const markerColor = getMarkerColorByStatus(task.status);
+        const hasArrived = checkArrivalAtDestination(task);
+
+        if (hasArrived && task.status === 'pending') {
+          toast({
+            title: "Arrived at Destination",
+            description: `You've reached ${task.location}`,
+          });
+        }
 
         const marker = new window.google.maps.Marker({
           position: {
@@ -175,25 +183,57 @@ export default function CollectPage() {
         // Create info window with task details
         const infoWindow = new window.google.maps.InfoWindow({
           content: `
-            <div style="width: 200px; padding: 10px;">
-              <h3 style="margin: 0 0 8px; font-weight: bold;">${task.location}</h3>
-              <p style="margin: 0 0 5px;"><strong>Waste:</strong> ${task.wasteType}</p>
-              <p style="margin: 0 0 5px;"><strong>Amount:</strong> ${task.amount}</p>
-              <p style="margin: 0 0 5px;"><strong>Date:</strong> ${task.date}</p>
-              <p style="margin: 0 0 5px;"><strong>Status:</strong> ${task.status.replace('_', ' ')}</p>
-              ${task.status === 'pending' ?
-              `<button id="nav-btn-${task.id}" style="background-color: #3B82F6; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 5px;">Navigate</button>` :
+          <div style="width: 200px; padding: 10px;">
+            <h3 style="margin: 0 0 8px; font-weight: bold;">${task.location}</h3>
+            <p style="margin: 0 0 5px;"><strong>Waste:</strong> ${task.wasteType}</p>
+            <p style="margin: 0 0 5px;"><strong>Amount:</strong> ${task.amount}</p>
+            <p style="margin: 0 0 5px;"><strong>Date:</strong> ${task.date}</p>
+            <p style="margin: 0 0 5px;"><strong>Status:</strong> ${task.status.replace('_', ' ')}</p>
+            ${task.status === 'pending' ?
+              `<button id="nav-btn-${task.id}" style="background-color: #3B82F6; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 5px; margin-right: 5px;">Navigate</button>` :
               ''}
-            </div>
-          `
+            ${(hasArrived && task.status === 'pending') ?
+              `<button id="start-btn-${task.id}" style="background-color: #10B981; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 5px;">Start Collection</button>` :
+              ''}
+            ${(task.status === 'in_progress' && task.collectorId === user?.id) ?
+              `<button id="complete-btn-${task.id}" style="background-color: #8B5CF6; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 5px;">Complete & Verify</button>` :
+              ''}
+          </div>
+        `
         });
 
         // Add click event listener to marker
         marker.addListener('click', () => {
           infoWindow.open(map, marker);
+
+          // Add click listeners to buttons after the info window is opened
+          setTimeout(() => {
+            const navButton = document.getElementById(`nav-btn-${task.id}`);
+            if (navButton) {
+              navButton.addEventListener('click', () => {
+                navigateToTask(task);
+                infoWindow.close();
+              });
+            }
+
+            const startButton = document.getElementById(`start-btn-${task.id}`);
+            if (startButton) {
+              startButton.addEventListener('click', () => {
+                handleStatusChange(task.id, 'in_progress');
+                infoWindow.close();
+              });
+            }
+
+            const completeButton = document.getElementById(`complete-btn-${task.id}`);
+            if (completeButton) {
+              completeButton.addEventListener('click', () => {
+                setSelectedTask(task);
+                infoWindow.close();
+              });
+            }
+          }, 100);
         });
 
-        // Store marker reference for later cleanup
         markersRef.current.push(marker);
       }
     });
@@ -204,6 +244,28 @@ export default function CollectPage() {
       markersRef.current.forEach(marker => bounds.extend(marker.getPosition()));
       if (userLocation) bounds.extend(userLocation);
       map.fitBounds(bounds);
+    }
+  };
+
+  const navigateToTask = (task: CollectionTask) => {
+    if (task.latitude && task.longitude) {
+      let url;
+
+      if (userLocation) {
+        // If we have user location, create a route from user to destination
+        url = `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${task.latitude},${task.longitude}&travelmode=driving`;
+      } else {
+        // If we don't have user location, just show destination
+        url = `https://www.google.com/maps/dir/?api=1&destination=${task.latitude},${task.longitude}&travelmode=driving`;
+      }
+
+      window.open(url, '_blank');
+    } else {
+      toast({
+        title: 'Error',
+        description: 'Location coordinates not available for navigation.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -218,19 +280,49 @@ export default function CollectPage() {
     }
   };
 
-  // // Open Google Maps navigation to task location
-  // const navigateToTask = (task: CollectionTask) => {
-  //   if (task.latitude && task.longitude) {
-  //     const url = `https://www.google.com/maps/dir/?api=1&destination=${task.latitude},${task.longitude}&travelmode=driving`;
-  //     window.open(url, '_blank');
-  //   } else {
-  //     toast({
-  //       title: 'Error',
-  //       description: 'Location coordinates not available for navigation.',
-  //       variant: 'destructive',
-  //     });
-  //   }
-  // };
+  const checkArrivalAtDestination = (task: CollectionTask) => {
+    if (!userLocation) return false;
+
+    // Simple distance calculation (in kilometers)
+    const lat1 = userLocation.lat;
+    const lon1 = userLocation.lng;
+    const lat2 = parseFloat(task.latitude);
+    const lon2 = parseFloat(task.longitude);
+
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c * 1000; // Distance in meters
+
+    // Consider arrived if within 50 meters
+    return distance < 50;
+  };
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (viewMode === 'map' && userLocation) {
+      intervalId = setInterval(() => {
+        tasks.forEach(task => {
+          if (task.status === 'pending' && checkArrivalAtDestination(task)) {
+            toast({
+              title: "Arrived at Destination",
+              description: `You've reached ${task.location}`,
+            });
+          }
+        });
+      }, 5000); // Check every 5 seconds
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [viewMode, userLocation, tasks]);
 
   useEffect(() => {
     const fetchUserAndTasks = async () => {
@@ -251,7 +343,7 @@ export default function CollectPage() {
         } else {
           toast({
             title: 'Error',
-            description: 'User not logged in. Please log in.',
+            description: 'Please log in to view available tasks.',
             variant: 'destructive',
           });
         }

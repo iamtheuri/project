@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 import { useState, useEffect } from "react";
 import { User, Mail, Save } from "lucide-react";
@@ -31,7 +32,7 @@ export default function SettingsPage() {
         const userEmail = localStorage.getItem("userEmail");
         console.log("userEmail", userEmail);
         if (!userEmail) {
-          setError("No user email found");
+          setError("User email not found in local storage");
           return;
         }
 
@@ -106,7 +107,20 @@ export default function SettingsPage() {
   };
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+  if (error) return (
+    // <div className="p-8 text-center text-red-500">
+    //   {error}
+    // </div>
+    <div className="space-y-4">
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-lg font-medium text-gray-800 flex items-center">
+            Login to view more
+          </h2>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
