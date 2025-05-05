@@ -59,17 +59,20 @@ export async function createUser(
 export async function updateUserDetails(
   userId: number,
   name: string,
+  role: string,
   email: string,
   newPassword?: string
 ) {
   try {
     const updateData: {
       name: string;
+      role: string;
       email: string;
       updatedAt: Date;
       password?: string;
     } = {
       name,
+      role,
       email,
       updatedAt: new Date(),
     };

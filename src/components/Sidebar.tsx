@@ -1,22 +1,52 @@
+// @ts-nocheck
+"use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { MapPin, Trash, Coins, Medal, Settings, Home, Car } from "lucide-react";
+import { MapPin, Trash, Coins, Medal, Settings, Home } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useAuthStatus } from "@/lib/web3auth";
+import { getUserByEmail } from "@/utils/db/actions";
 
-const sidebarItems = [
-  { href: "/", icon: Home, label: "Home" },
-  { href: "/report", icon: MapPin, label: "Report Waste" },
-  { href: "/collect", icon: Trash, label: "Collect Waste" },
-  { href: "/rewards", icon: Coins, label: "Rewards" },
-  { href: "/leaderboard", icon: Medal, label: "Leaderboard" },
-];
-
-interface SidebarProps {
-  open: boolean;
-}
-
-export default function Sidebar({ open }: SidebarProps) {
+export default function Sidebar({ open }) {
   const pathname = usePathname();
+  const [error, setError] = useState(null);
+  const [isReporter, setIsReporter] = useState(false);
+  const { isLoggedIn } = useAuthStatus();
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const userEmail = localStorage.getItem("userEmail");
+        if (!userEmail) {
+          setError("User email not found in local storage");
+          return;
+        }
+        const user = await getUserByEmail(userEmail);
+        setIsReporter(user?.role === "Reporter");
+      } catch (err) {
+        console.error("Failed to fetch user:", err);
+      }
+    };
+
+    if (isLoggedIn) {
+      fetchUser();
+    }
+  }, [isLoggedIn]);
+
+  // Define sidebar items - we'll filter them later based on user role
+  const allSidebarItems = [
+    { href: "/", icon: Home, label: "Home" },
+    { href: "/report", icon: MapPin, label: "Report Waste" },
+    { href: "/collect", icon: Trash, label: "Collect Waste", hideForReporter: true },
+    { href: "/rewards", icon: Coins, label: "Rewards" },
+    { href: "/leaderboard", icon: Medal, label: "Leaderboard" },
+  ];
+
+  // Filter sidebar items based on user role
+  const visibleSidebarItems = allSidebarItems.filter(
+    item => !(item.hideForReporter && isReporter)
+  );
 
   return (
     <aside
@@ -25,7 +55,7 @@ export default function Sidebar({ open }: SidebarProps) {
     >
       <nav className="h-full flex flex-col justify-between">
         <div className="px-4 py-6 space-y-8">
-          {sidebarItems.map((item) => (
+          {visibleSidebarItems.map((item) => (
             <Link key={item.href} href={item.href} passHref>
               <Button
                 variant={pathname === item.href ? "secondary" : "ghost"}

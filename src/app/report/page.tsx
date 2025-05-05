@@ -28,6 +28,7 @@ export default function ReportPage() {
   const { toast } = useToast();
   const [user, setUser] = useState<{
     id: number;
+    role: string;
     email: string;
     name: string;
   } | null>(null);
@@ -350,6 +351,8 @@ export default function ReportPage() {
     }
   };
 
+  const [isReporter, setIsReporter] = useState(false);
+
   useEffect(() => {
     const checkUser = async () => {
       const email = localStorage.getItem("userEmail");
@@ -359,6 +362,7 @@ export default function ReportPage() {
           user = await createUser(email, "Anonymous User");
         }
         setUser(user);
+        setIsReporter(user.role === "Reporter");
 
         const recentReports = await getRecentReports();
         const formattedReports = recentReports.map((report) => ({
@@ -369,7 +373,7 @@ export default function ReportPage() {
       } else {
         toast({
           title: "Error",
-          description: "Please in to report waste.",
+          description: "Please log in to report waste.",
           variant: "destructive",
         });
         return;
@@ -382,7 +386,7 @@ export default function ReportPage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      {isLoggedIn ? (
+      {isLoggedIn && isReporter ? (
         <>
           <h1 className="text-3xl font-semibold mb-6 text-gray-800">
             Report waste

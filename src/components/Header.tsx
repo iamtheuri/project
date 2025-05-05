@@ -216,7 +216,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
       });
     } finally {
       setLoggingOut(false);
-      checkAuthStatus();
+      // checkAuthStatus();
       toast({
         title: "Success",
         description: "Logged out successfully",

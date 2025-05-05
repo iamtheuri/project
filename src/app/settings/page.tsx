@@ -9,11 +9,13 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 
 type UserSettings = {
   name: string;
+  role: string;
   email: string;
 };
 
 const DEFAULT_SETTINGS: UserSettings = {
   name: "No name provided",
+  role: "None",
   email: "No email provided",
 };
 
@@ -24,6 +26,7 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   usePageTitle("Profile");
 
   useEffect(() => {
@@ -37,12 +40,15 @@ export default function SettingsPage() {
         }
 
         const user = await getUserByEmail(userEmail);
+        console.log("user", user);
         if (user) {
           setSettings({
             name: user.name ?? DEFAULT_SETTINGS.name,
+            role: user.role ?? DEFAULT_SETTINGS.role,
             email: user.email ?? DEFAULT_SETTINGS.email,
           });
           setUserId(user.id);
+          setIsAdmin(user.role === "Admin");
         }
       } catch (err) {
         console.error("Failed to fetch user:", err);
@@ -69,7 +75,7 @@ export default function SettingsPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    // e.preventDefault();
     if (!userId) {
       toast({
         title: "Error",
@@ -84,6 +90,7 @@ export default function SettingsPage() {
       const updatedUser = await updateUserDetails(
         userId,
         settings.name,
+        settings.role,
         settings.email
       );
 
@@ -91,14 +98,14 @@ export default function SettingsPage() {
         localStorage.setItem("userInfo", JSON.stringify(settings));
         toast({
           title: "Success",
-          description: "Settings updated successfully!",
+          description: "Profile updated successfully!",
         });
       }
     } catch (err) {
-      console.error("Failed to save settings:", err);
+      console.error("Failed to update profile:", err);
       toast({
         title: "Error",
-        description: "Failed to save settings",
+        description: "Failed to update profile",
         variant: "destructive",
       });
     } finally {
@@ -131,6 +138,7 @@ export default function SettingsPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {[
           { field: "name", icon: User, label: "Full Name", type: "text" },
+          { field: "role", icon: User, label: "Role", type: "text" },
           { field: "email", icon: Mail, label: "Email Address", type: "email" }
         ].map(({ field, icon: Icon, label, type }) => (
           <div key={field}>
@@ -145,6 +153,7 @@ export default function SettingsPage() {
                 value={settings[field as keyof UserSettings]}
                 onChange={handleInputChange}
                 className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                disabled={!isAdmin}
                 required
               />
               <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -155,7 +164,7 @@ export default function SettingsPage() {
         <Button
           type="submit"
           className="w-full bg-green-500 hover:bg-green-600 text-white"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !isAdmin}
         >
           {isSubmitting ? (
             "Saving..."
