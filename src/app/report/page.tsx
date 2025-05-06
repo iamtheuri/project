@@ -461,15 +461,12 @@ export default function ReportPage() {
                     <h3 className="text-lg font-medium text-green-800">
                       Verification Successful
                     </h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <p>Waste Type: {verificationResult.wasteType}</p>
-                      <p>Quantity: {verificationResult.quantity}</p>
-                      <p>
-                        Confidence:{" "}
-                        {(verificationResult.confidence * 100).toFixed(2)}%
-                      </p>
-                      <p>Description: {verificationResult.description}</p>
-                      <p>Recommendation: {verificationResult.recommendation}</p>
+                    <div className="mt-2 text-base font-medium text-green-700">
+                      <p><span className="text-base font-black">WASTE TYPE:</span> {verificationResult.wasteType}</p>
+                      <p> <span className="text-lg font-black">Quantity:</span> {verificationResult.quantity}</p>
+                      <p><span className="text-lg font-black">Confidence:</span>  {(verificationResult.confidence * 100).toFixed(2)}%</p>
+                      <p className="text-lg font-black">Description:</p><p>  {verificationResult.description}</p>
+                      <p className="text-lg font-black">Recommendation:</p><p>  {verificationResult.recommendation}</p>
                     </div>
                   </div>
                 </div>
@@ -534,6 +531,46 @@ export default function ReportPage() {
               </div>
               <div>
                 <label
+                  htmlFor="description"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Waste Description
+                </label>
+                <textarea
+                  type="text"
+                  id="description"
+                  name="description"
+                  rows={6}
+                  value={newReport.description}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
+                  placeholder="Description"
+                  readOnly
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="recommendation"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Disposal Recommendation
+                </label>
+                <textarea
+                  type="text"
+                  id="recommendation"
+                  name="recommendation"
+                  rows={6}
+                  value={newReport.recommendation}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
+                  placeholder="Recommendation"
+                  readOnly
+                />
+              </div>
+              <div>
+                <label
                   htmlFor="amount"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
@@ -548,46 +585,6 @@ export default function ReportPage() {
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
                   placeholder="Verified amount"
-                  readOnly
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="description"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Waste Description
-                </label>
-                <textarea
-                  type="text"
-                  id="description"
-                  name="description"
-                  value={newReport.description}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
-                  placeholder="Description"
-                  readOnly
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="recommendation"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Disposal Recommendation
-                </label>
-                <textarea
-                  type="text"
-                  id="recommendation"
-                  name="recommendation"
-                  value={newReport.recommendation}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-300 bg-gray-100"
-                  placeholder="Recommendation"
                   readOnly
                 />
               </div>

@@ -114,6 +114,16 @@ export default function Home() {
         )}
       </section>
 
+      <section className="bg-white p-10 rounded-3xl shadow-lg mb-20">
+        <h2 className="text-4xl font-bold mb-12 text-center text-gray-800">Impact</h2>
+        <div className="grid md:grid-cols-4 gap-6">
+          <ImpactCard title="Approx. Waste Collected" value={`${impactData.wasteCollected} kg`} icon={Recycle} />
+          <ImpactCard title="Reports Submitted" value={impactData.reportsSubmitted.toString()} icon={MapPin} />
+          <ImpactCard title="Tokens Earned" value={impactData.tokensEarned.toString()} icon={Coins} />
+          <ImpactCard title="Approx. CO2 Offset" value={`${impactData.co2Offset} kg`} icon={Leaf} />
+        </div>
+      </section>
+
       <section className="grid md:grid-cols-3 gap-10 mb-20">
         <FeatureCard
           icon={Leaf}
@@ -131,17 +141,6 @@ export default function Home() {
           description="Be part of a growing community committed to sustainable practices."
         />
       </section>
-
-      <section className="bg-white p-10 rounded-3xl shadow-lg mb-20">
-        <h2 className="text-4xl font-bold mb-12 text-center text-gray-800">Our Impact</h2>
-        <div className="grid md:grid-cols-4 gap-6">
-          <ImpactCard title="Waste Collected" value={`${impactData.wasteCollected} kg`} icon={Recycle} />
-          <ImpactCard title="Reports Submitted" value={impactData.reportsSubmitted.toString()} icon={MapPin} />
-          <ImpactCard title="Tokens Earned" value={impactData.tokensEarned.toString()} icon={Coins} />
-          <ImpactCard title="CO2 Offset" value={`${impactData.co2Offset} kg`} icon={Leaf} />
-        </div>
-      </section>
-
 
     </div>
   )

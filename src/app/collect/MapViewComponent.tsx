@@ -237,7 +237,7 @@ export const MapViewComponent = ({
   const checkArrivalAtDestination = (task: CollectionTask) => {
     if (!userLocation) return false
 
-    // Simple distance calculation (in kilometers)
+    // Distance calculation (in kilometers)
     const lat1 = userLocation.lat
     const lon1 = userLocation.lng
     const lat2 = Number(task.latitude)

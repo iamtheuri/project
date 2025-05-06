@@ -178,7 +178,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
         variant: "default",
       });
 
-      checkAuthStatus();
+      // checkAuthStatus();
       setAuthModalOpen(false);
     } catch (error) {
       console.error("Error during login:", error);
