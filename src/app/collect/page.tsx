@@ -254,6 +254,14 @@ export default function CollectPage() {
   )
   const pageCount = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE)
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center my-60">
+        <Loader className="animate-spin h-10 w-10 text-green-300" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-semibold mb-6 text-gray-800">Waste Collection Tasks</h1>
